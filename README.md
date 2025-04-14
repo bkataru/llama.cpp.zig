@@ -1,5 +1,5 @@
 # llama.cpp.zig
-llama.cpp bindings and utilities for zig. Currently targeting zig `0.13.x`. 
+llama.cpp bindings and utilities for zig. Currently targeting zig `0.14.x`. 
 
 * Provides build from source using zig build.
 * Implements llama.h for nicer interaction with zig.
