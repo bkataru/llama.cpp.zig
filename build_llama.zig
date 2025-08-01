@@ -121,6 +121,11 @@ pub const Context = struct {
         ctx.addLLama(compile);
     }
 
+    /// build server executable
+    pub fn buildServer(ctx: *Context, options: @import("build_server.zig").ServerOptions) *CompileStep {
+        return @import("build_server.zig").buildServer(ctx, options);
+    }
+
     /// zig module with translated headers
     pub fn moduleLlama(ctx: *Context) *Module {
         const tc = ctx.b.addTranslateC(.{
