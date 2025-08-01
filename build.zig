@@ -1,5 +1,6 @@
 const std = @import("std");
 const llama = @import("build_llama.zig");
+const server = @import("build_server.zig");
 const Target = std.Build.ResolvedTarget;
 const ArrayList = std.ArrayList;
 const CompileStep = std.Build.Step.Compile;
@@ -94,7 +95,12 @@ pub const Context = struct {
 };
 
 pub fn build(b: *std.Build) !void {
+    // Build options
     const install_cpp_samples = b.option(bool, "cpp_samples", "Install llama.cpp samples") orelse false;
+    const build_server = b.option(bool, "server", "Build llama-server") orelse false;
+    const server_ssl = b.option(bool, "server-ssl", "Enable SSL support in server") orelse false;
+    const server_metrics = b.option(bool, "server-metrics", "Enable metrics in server") orelse true;
+    const server_embed = b.option(bool, "server-embed", "Embed assets in server") orelse true;
 
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
@@ -104,12 +110,43 @@ pub fn build(b: *std.Build) !void {
         .optimize = optimize,
     });
 
-    llama_zig.llama.samples(install_cpp_samples) catch |err| std.log.err("Can't build CPP samples, error: {}", .{err});
+    llama_zig.llama.samples(install_cpp_samples) catch |err| 
+        std.log.err("Can't build CPP samples, error: {}", .{err});
 
+    // Build server if requested
+    if (build_server) {
+        const server_options = server.ServerOptions{
+            .enable_ssl = server_ssl,
+            .enable_cors = true,
+            .enable_metrics = server_metrics,
+            .embed_assets = server_embed,
+        };
+        
+        const server_exe = llama_zig.llama.buildServer(server_options);
+        b.installArtifact(server_exe);
+        
+        // Add run step for server
+        const run_server = server.createRunCommand(b, server_exe);
+        const run_step = b.step("run-server", "Run llama-server");
+        run_step.dependOn(&run_server.step);
+        
+        // Add quick start step
+        const quickstart = b.step("quickstart", "Build and run server with a model");
+        const quickstart_run = server.createRunCommand(b, server_exe);
+        quickstart_run.addArg("-m");
+        quickstart_run.addArg("models/rocket-3b.Q4_K_M.gguf");
+        quickstart_run.addArg("--ctx-size");
+        quickstart_run.addArg("4096");
+        quickstart_run.addArg("--threads");
+        quickstart_run.addArg("8");
+        quickstart.dependOn(&quickstart_run.step);
+    }
+
+    // Build examples
     llama_zig.sample("examples", "simple");
-    // llama_zig.sample("examples", "interactive");
 
-    { // tests
+    // Tests
+    {
         const main_tests = b.addTest(.{
             .root_source_file = b.path("llama.cpp.zig/llama.zig"),
             .target = target,
